@@ -1,0 +1,15 @@
+[tool.poetry]
+name = "similaritysearch"
+version = "0.1.0"
+description = "searches for similar data in media files"
+authors = ["Ametist3d <ame4642@gmail.com>"]
+license = "test"
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.12"
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
