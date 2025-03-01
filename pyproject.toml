@@ -1,13 +1,17 @@
 [tool.poetry]
 name = "similaritysearch"
 version = "0.1.0"
-description = "searches for similar data in media files"
+description = "A project for performing similarity search on text data."
 authors = ["Ametist3d <ame4642@gmail.com>"]
 license = "test"
 readme = "README.md"
 
 [tool.poetry.dependencies]
-python = "^3.12"
+python = "^3.10"
+pandas = "^2.2.3"
+numpy = ">=1.21.0,<2.0.0"
+sentence-transformers = "^3.4.1"
+faiss-gpu = "^1.7.2"
 
 
 [build-system]
