@@ -1,6 +1,8 @@
 # SimilaritySearch
 
-A project for performing similarity search on text data.
+A project for performing similarity search on various data.
+Currently supported data:
+ - text
 
 ## Installation
 

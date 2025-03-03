@@ -29,7 +29,7 @@ env/
 .idea/
 
 # System
-._DS/
+_DS/
 
 #Datasets
 .csv
