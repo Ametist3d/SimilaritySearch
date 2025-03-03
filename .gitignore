@@ -29,4 +29,8 @@ env/
 .idea/
 
 # System
-.DS_Store
+._DS/
+
+#Datasets
+.csv
+.index
