@@ -30,7 +30,9 @@ env/
 
 # System
 _DS/
+input/
 
 #Datasets
-.csv
-.index
+*.csv
+*.index
+*.npz
