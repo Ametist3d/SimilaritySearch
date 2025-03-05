@@ -8,7 +8,6 @@ import faiss
 
 from typing import List
 import torch
-
 from request import ImageSearchRequest
 
 from img_sim_search import (

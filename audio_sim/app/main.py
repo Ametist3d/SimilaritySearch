@@ -1,56 +1,100 @@
+from fastapi import FastAPI, HTTPException
+import uvicorn
+from contextlib import asynccontextmanager
 import os
+import logging
 import numpy as np
-from audio_sim_search import process_audio_directory, create_faiss_index, search_similar, wav_to_embedding
-from transformers import ASTFeatureExtractor, ASTModel
+import faiss
 
-def main():
-    # Configure paths
-    BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-    audio_folder = os.path.join(BASE_DIR, "..", "..", "_DS", "Audio_DS")
-    audio_folder = os.path.abspath(audio_folder)
-    dataset_file = os.path.join(BASE_DIR, "..", "..", "audio_emb_dataset.npz")
+from typing import List
+import torch
+from request import AudioSearchRequest
 
-    # Load/create embeddings
-    if not os.path.exists(dataset_file):
-        print("Creating new embeddings dataset...")
-        embeddings, filenames = process_audio_directory(audio_folder)
-        np.savez(dataset_file, embeddings=embeddings, filenames=filenames)
-    else:
-        print("Loading existing embeddings dataset...")
-        data = np.load(dataset_file, allow_pickle=True)
-        embeddings = data['embeddings']
-        filenames = data['filenames']
+from audio_sim_search import (
+    wav_to_embedding,
+    process_audio_directory,
+    create_faiss_index,
+    search_similar,
+)
 
-    # Create FAISS index
-    index = create_faiss_index(embeddings)
-    
-    # Load model once for reuse
-    feature_extractor = ASTFeatureExtractor.from_pretrained("MIT/ast-finetuned-audioset-10-10-0.4593")
-    model = ASTModel.from_pretrained("MIT/ast-finetuned-audioset-10-10-0.4593")
+app_logger = logging.getLogger("api")
+index: faiss.Index = None
+audio_files: List[str] = None
 
-    # Interactive query loop
-    while True:
-        user_input = input("\nEnter query audio sample absolute path (or 'exit' to quit): ").strip()
-        
-        if user_input.lower() == 'exit':
-            print("Exiting...")
-            break
-            
-        if not os.path.isfile(user_input):
-            print(f"Error: File '{user_input}' not found.")
-            continue
-            
-        if not user_input.lower().endswith('.wav'):
-            print("Error: Only .wav files are supported.")
-            continue
-            
-        # Process query
-        query_emb = wav_to_embedding(user_input, feature_extractor, model)
-        if query_emb is not None:
-            results = search_similar(index, filenames, np.array([query_emb]), 3)
-            print("\nTop 3 similar results:")
-            for idx, (filename, distance) in enumerate(results, 1):
-                print(f"{idx}. {filename} (distance: {distance:.4f})")
+# Configuration
+EMBEDDINGS_FILE = "audio_embeddings_dataset.npz"
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    global index, audio_files
+
+    try:
+        BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+        audio_folder = os.path.join(BASE_DIR, "..", "..", "_DS", "Audio_DS")
+        audio_files = [
+            os.path.join(audio_folder, f)
+            for f in os.listdir(audio_folder)
+            if f.lower().endswith(".wav")
+        ]
+
+        # Load or create embeddings
+        if os.path.exists(EMBEDDINGS_FILE):
+            app_logger.info("Loading existing embeddings...")
+            data = np.load(EMBEDDINGS_FILE, allow_pickle=True)
+            embeddings = data["embeddings"]
+            audio_files = data["audio_files"]
+        else:
+            app_logger.info("Creating new embeddings...")
+            embeddings, audio_files = process_audio_directory(audio_folder)
+            np.savez(EMBEDDINGS_FILE, embeddings=embeddings, audio_files=audio_files)
+
+        # Build FAISS index
+        app_logger.info("Building FAISS index...")
+        index = create_faiss_index(embeddings)
+
+    except Exception as e:
+        app_logger.error(f"Initialization failed: {str(e)}")
+        raise
+
+    yield
+
+    # Cleanup
+    torch.cuda.empty_cache()
+
+
+app = FastAPI(lifespan=lifespan)
+
+
+@app.post("/search")
+async def audio_search(request: AudioSearchRequest):
+    if not request.audio:
+        raise HTTPException(status_code=400, detail="Audio cannot be empty")
+
+    try:
+        # Process input audio
+        if request.is_base64:
+            # Handle base64 audio (not implemented in this example)
+            raise HTTPException(
+                status_code=501, detail="Base64 audio not yet supported"
+            )
+        else:
+            # Handle URL or file path
+            query_embedding = wav_to_embedding(request.audio)
+            if query_embedding is None:
+                raise HTTPException(status_code=400, detail="Failed to process audio")
+
+        # Search index
+        results = search_similar(
+            index, audio_files, np.expand_dims(query_embedding, axis=0), request.k
+        )
+
+        return {"results": results}
+
+    except Exception as e:
+        app_logger.error(f"Search failed: {str(e)}")
+        raise HTTPException(status_code=500, detail="Search processing failed")
+
 
 if __name__ == "__main__":
-    main()
+    uvicorn.run(app, host="0.0.0.0", port=5000)
