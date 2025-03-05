@@ -48,16 +48,18 @@ def build_index(embeddings: np.ndarray):
     index.add(embeddings)
     return index
 
-def search_similar(index, query_text, model_name="all-MiniLM-L6-v2", texts=None, k=5):
-    """Given a query text, returns top k similar texts along with their distances."""
-    device = get_device()
-    model = SentenceTransformer(model_name, device=device)
+@torch.inference_mode()
+def search_similar(index, query_text, model=None, model_name="all-MiniLM-L6-v2", texts=None, k=5):
+    """Search with inference mode decorator."""
+    if model is None:
+        device = get_device()
+        model = SentenceTransformer(model_name, device=device)
+        model.eval()
+    
     query_emb = model.encode([query_text], convert_to_numpy=True).astype(np.float32)
     distances, indices = index.search(query_emb, k)
-    print("Returned indices:", indices[0])
-    results = []
-    for i, idx in enumerate(indices[0]):
-        distance = distances[0][i]
-        text_match = texts[idx] if texts is not None else f"ID: {idx}"
-        results.append((text_match, distance))
-    return results
+    
+    return [
+        (texts[idx] if texts else f"ID: {idx}", distances[0][i])
+        for i, idx in enumerate(indices[0])
+    ]

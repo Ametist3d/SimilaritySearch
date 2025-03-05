@@ -1,72 +1,105 @@
+from fastapi import FastAPI, HTTPException
+from contextlib import asynccontextmanager
 import os
 import logging
 import torch
 import faiss
 from txt_sim_search import (
     load_data,
+    combine_all_columns,
     build_embeddings,
     build_index,
     search_similar,
-    combine_all_columns,
+    get_device,
 )
+from request import SearchRequest 
+from sentence_transformers import SentenceTransformer
+from typing import List, Tuple
 
-log = logging.getLogger("app")
+app_logger = logging.getLogger("api")
+index: faiss.Index = None
+texts: List[str] = None
+model: SentenceTransformer = None
 
-
-def main():
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Lifespan management for FastAPI resources"""
+    global index, texts, model
+    
+    # Initialize resources
     BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-
-    # Construct CSV path
-    # csv_path = os.path.join(BASE_DIR, "..", "..", "_DS", "Text_Similarity_Dataset.csv")
     csv_path = os.path.join(BASE_DIR, "..", "..", "_DS", "war-news.csv")
-    log.info("CSV file path:" + os.path.abspath(csv_path))
-
-    # Derive index filename from CSV filename
-    csv_filename = os.path.basename(csv_path)
-    index_filename = os.path.splitext(csv_filename)[0] + ".index"
+    index_filename = "war-news.index"
     index_file_path = os.path.join(BASE_DIR, "..", "..", index_filename)
 
-    df = load_data(csv_path)
-    df["combined_text"] = df.apply(combine_all_columns, axis=1)
-    texts = df["combined_text"].tolist()
+    try:
+        # Load data
+        app_logger.info("Loading dataset...")
+        df = load_data(csv_path)
+        df["combined_text"] = df.apply(combine_all_columns, axis=1)
+        texts = df["combined_text"].tolist()
 
-    # Load or build index
-    if os.path.exists(index_file_path):
-        log.info("Loading existing FAISS index from disk...")
-        index = faiss.read_index(index_file_path)
-        if torch.cuda.is_available() and faiss.get_num_gpus() > 0:
-            log.info("Transferring loaded CPU index to GPU for faster search...")
-            res = faiss.StandardGpuResources()
-            index = faiss.index_cpu_to_gpu(res, 0, index)
+        # Load/build index
+        if os.path.exists(index_file_path):
+            app_logger.info("Loading existing FAISS index...")
+            index = faiss.read_index(index_file_path)
+            if torch.cuda.is_available() and faiss.get_num_gpus() > 0:
+                app_logger.info("Moving index to GPU...")
+                res = faiss.StandardGpuResources()
+                index = faiss.index_cpu_to_gpu(res, 0, index)
         else:
-            log.info("Using CPU for FAISS index.")
-    else:
-        log.info("Building embeddings and FAISS index from dataset...")
-        embeddings = build_embeddings(texts)
-        index = build_index(embeddings)
-        log.info("Saving FAISS index to disk...")
-        # Convert GPU index to CPU index before saving if necessary.
-        if torch.cuda.is_available() and faiss.get_num_gpus() > 0:
-            log.info("Converting GPU index to CPU index for serialization...")
-            index = faiss.index_gpu_to_cpu(index)
-        faiss.write_index(index, index_file_path)
+            app_logger.info("Building new index...")
+            embeddings = build_embeddings(texts)
+            index = build_index(embeddings)
+            if torch.cuda.is_available() and faiss.get_num_gpus() > 0:
+                cpu_index = faiss.index_gpu_to_cpu(index)
+                faiss.write_index(cpu_index, index_file_path)
+            else:
+                faiss.write_index(index, index_file_path)
 
+        # Initialize model
+        app_logger.info("Loading sentence transformer model...")
+        device = get_device()
+        model = SentenceTransformer("all-MiniLM-L6-v2", device=device)
+        model.eval()
 
-    log.info("\nWelcome to Text Similarity Search!")
-    log.info("Type 'exit' to quit.\n")
+    except Exception as e:
+        app_logger.error(f"Initialization failed: {str(e)}")
+        raise
 
-    while True:
-        query = input("Enter your text query: ")
-        if query.lower() == "exit":
-            log.info("Exiting the application.")
-            break
+    yield  # App is running
 
-        results = search_similar(index, query, texts=texts, k=5)
-        log.info("\nTop 5 Similar Results:")
-        for i, (text_match, distance) in enumerate(results):
-            log.info(f"{i+1}. {text_match} (Distance: {distance:.4f})\n\n")
-        log.info("")
+    # Cleanup
+    app_logger.info("Cleaning up resources...")
+    del model
+    torch.cuda.empty_cache()
 
+app = FastAPI(lifespan=lifespan)
+
+@app.post("/search")
+async def search_endpoint(request: SearchRequest):
+    if not request.query:
+        raise HTTPException(status_code=400, detail="Query cannot be empty")
+    
+    try:
+        results = search_similar(
+            index=index,
+            query_text=request.query,
+            model=model,
+            texts=texts,
+            k=min(request.k, 20)
+        )
+        return {
+            "query": request.query,
+            "results": [
+                {"text": text, "score": float(score)}
+                for text, score in results
+            ]
+        }
+    except Exception as e:
+        app_logger.error(f"Search failed: {str(e)}")
+        raise HTTPException(status_code=500, detail="Search processing failed")
 
 if __name__ == "__main__":
-    main()
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=5000)
