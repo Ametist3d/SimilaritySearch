@@ -10,19 +10,25 @@ from typing import List
 import torch
 from request import AudioSearchRequest
 
-from audio_sim_search import (
-    wav_to_embedding,
-    process_audio_directory,
-    create_faiss_index,
-    search_similar,
-)
+# from audio_sim_search import (
+#     wav_to_embedding,
+#     process_audio_directory,
+#     create_faiss_index,
+#     search_similar,
+#     model,
+#     feature_extractor,
+#     device,
+# )
+from audio_sim_search import get_audio_sim_search, setup_audio_sim_search
+
+# Import shared configuration
+from config import DATASET_DIR, EMBEDDINGS_FILE
 
 app_logger = logging.getLogger("api")
 index: faiss.Index = None
 audio_files: List[str] = None
-
-# Configuration
-EMBEDDINGS_FILE = "audio_embeddings_dataset.npz"
+setup_audio_sim_search()
+audio_sim_search = get_audio_sim_search()
 
 
 @asynccontextmanager
@@ -30,11 +36,10 @@ async def lifespan(app: FastAPI):
     global index, audio_files
 
     try:
-        BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-        audio_folder = os.path.join(BASE_DIR, "..", "..", "_DS", "Audio_DS")
+        # Get audio files from the dataset directory
         audio_files = [
-            os.path.join(audio_folder, f)
-            for f in os.listdir(audio_folder)
+            os.path.join(DATASET_DIR, f)
+            for f in os.listdir(DATASET_DIR)
             if f.lower().endswith(".wav")
         ]
 
@@ -46,12 +51,14 @@ async def lifespan(app: FastAPI):
             audio_files = data["audio_files"]
         else:
             app_logger.info("Creating new embeddings...")
-            embeddings, audio_files = process_audio_directory(audio_folder)
+            embeddings, audio_files = audio_sim_search.process_audio_directory(
+                DATASET_DIR
+            )
             np.savez(EMBEDDINGS_FILE, embeddings=embeddings, audio_files=audio_files)
 
         # Build FAISS index
         app_logger.info("Building FAISS index...")
-        index = create_faiss_index(embeddings)
+        index = audio_sim_search.create_faiss_index(embeddings)
 
     except Exception as e:
         app_logger.error(f"Initialization failed: {str(e)}")
@@ -80,14 +87,16 @@ async def audio_search(request: AudioSearchRequest):
             )
         else:
             # Handle URL or file path
-            query_embedding = wav_to_embedding(request.audio)
+            query_embedding = audio_sim_search.wav_to_embedding(request.audio)
             if query_embedding is None:
                 raise HTTPException(status_code=400, detail="Failed to process audio")
 
+        # Assign the index and audio_files to the instance so they are used in search_similar
+        audio_sim_search.index = index
+        audio_sim_search.audio_files = audio_files
+
         # Search index
-        results = search_similar(
-            index, audio_files, np.expand_dims(query_embedding, axis=0), request.k
-        )
+        results = audio_sim_search.search_similar(np.expand_dims(query_embedding, axis=0), request.k)
 
         return {"results": results}
 
