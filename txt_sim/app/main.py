@@ -11,6 +11,7 @@ import config
 app_logger = logging.getLogger("api")
 text_sim_search = None
 
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     global text_sim_search
@@ -25,10 +26,10 @@ async def lifespan(app: FastAPI):
             raise Exception("No CSV file found in the dataset folder")
         csv_file = csv_files[0]
         csv_path = os.path.join(dataset_dir, csv_file)
-        
+
         app_logger.info(f"Using CSV file: {csv_path}")
         app_logger.info(f"Index file path: {embeddings_file}")
-        
+
         # Setup the text similarity search instance using the CSV and index file from config
         setup_text_sim_search(csv_path, embeddings_file)
         text_sim_search = get_text_sim_search()
@@ -42,24 +43,28 @@ async def lifespan(app: FastAPI):
     del text_sim_search
     torch.cuda.empty_cache()
 
+
 app = FastAPI(lifespan=lifespan)
+
 
 @app.post("/search")
 async def search_endpoint(request: SearchRequest):
     if not request.query:
         raise HTTPException(status_code=400, detail="Query cannot be empty")
     try:
-        results = text_sim_search.search_similar(query_text=request.query, k=min(request.k, 20))
+        results = text_sim_search.search_similar(
+            query_text=request.query, k=min(request.k, 20)
+        )
         return {
             "query": request.query,
             "results": [
-                {"text": text, "score": float(score)}
-                for text, score in results
-            ]
+                {"text": text, "score": float(score)} for text, score in results
+            ],
         }
     except Exception as e:
         app_logger.error(f"Search failed: {str(e)}")
         raise HTTPException(status_code=500, detail="Search processing failed")
+
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=5000)

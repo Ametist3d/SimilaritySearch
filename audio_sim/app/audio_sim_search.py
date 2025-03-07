@@ -1,15 +1,19 @@
 import os
-import requests
+from typing import List, Optional, Tuple
+import logging
 import tempfile
+import requests
 import numpy as np
 import librosa
 import torch
 import faiss
 from transformers import ASTFeatureExtractor, ASTModel
-from typing import List, Optional, Tuple
+
 
 # Import shared configuration
 from config import CACHE_DIR, DATASET_DIR
+
+logger = logging.getLogger(__name__)
 
 
 class AudioSimSearch:
@@ -39,7 +43,7 @@ class AudioSimSearch:
                 temp_file.write(response.content)
                 return temp_file.name
         except Exception as e:
-            print(f"Error downloading audio from URL: {str(e)}")
+            logger.error(f"Error downloading audio from URL: {str(e)}")
             return None
 
     def get_audio_paths(self, audio_folder: str) -> List[str]:
@@ -88,7 +92,7 @@ class AudioSimSearch:
 
             return embedding
         except Exception as e:
-            print(f"Error processing {wav_path}: {str(e)}")
+            logger.error(f"Error processing {wav_path}: {str(e)}")
             return None
 
     def process_audio_directory(
@@ -111,7 +115,7 @@ class AudioSimSearch:
         """Create and return FAISS index."""
         dim = embeddings.shape[1]
         index = faiss.IndexFlatL2(dim)  # For Euclidean distance
-        #pylint: disable-next=no-value-for-parameter
+        # pylint: disable-next=no-value-for-parameter
         index.add(embeddings.astype(np.float32))
         return index
 
@@ -121,8 +125,8 @@ class AudioSimSearch:
             raise ValueError(
                 "FAISS index and audio files must be initialized before searching."
             )
-        
-        #pylint: disable-next=no-value-for-parameter
+
+        # pylint: disable-next=no-value-for-parameter
         distances, indices = self.index.search(query_embedding, top_k)
         results = []
         for i, idx in enumerate(indices[0]):
@@ -130,7 +134,9 @@ class AudioSimSearch:
                 continue  # Skip invalid indices
             results.append(
                 {
-                    "audio_path": os.path.normpath(os.path.join(DATASET_DIR, self.audio_files[idx])),
+                    "audio_path": os.path.normpath(
+                        os.path.join(DATASET_DIR, self.audio_files[idx])
+                    ),
                     "similarity_score": float(
                         1 / (1 + distances[0][i])
                     ),  # Convert distance to similarity
@@ -142,19 +148,19 @@ class AudioSimSearch:
         """Initialize the FAISS index and audio files."""
         # Load or create embeddings
         if os.path.exists(embeddings_file):
-            print("Loading existing embeddings...")
+            logger.info("Loading existing embeddings...")
             data = np.load(embeddings_file, allow_pickle=True)
             embeddings = data["embeddings"]
             self.audio_files = data["audio_files"]
         else:
-            print("Creating new embeddings...")
+            logger.info("Creating new embeddings...")
             embeddings, self.audio_files = self.process_audio_directory(audio_folder)
             np.savez(
                 embeddings_file, embeddings=embeddings, audio_files=self.audio_files
             )
 
         # Build FAISS index
-        print("Building FAISS index...")
+        logger.info("Building FAISS index...")
         self.index = self.create_faiss_index(embeddings)
 
 

@@ -10,15 +10,6 @@ from typing import List
 import torch
 from request import AudioSearchRequest
 
-# from audio_sim_search import (
-#     wav_to_embedding,
-#     process_audio_directory,
-#     create_faiss_index,
-#     search_similar,
-#     model,
-#     feature_extractor,
-#     device,
-# )
 from audio_sim_search import get_audio_sim_search, setup_audio_sim_search
 
 # Import shared configuration
@@ -96,7 +87,9 @@ async def audio_search(request: AudioSearchRequest):
         audio_sim_search.audio_files = audio_files
 
         # Search index
-        results = audio_sim_search.search_similar(np.expand_dims(query_embedding, axis=0), request.k)
+        results = audio_sim_search.search_similar(
+            np.expand_dims(query_embedding, axis=0), request.k
+        )
 
         return {"results": results}
 

@@ -1,10 +1,15 @@
 import os
+import logging
+from typing import List, Tuple
 import pandas as pd
 import faiss
 import numpy as np
 import torch
 from sentence_transformers import SentenceTransformer
-from typing import List, Tuple
+
+
+logger = logging.getLogger(__name__)
+
 
 class TextSimSearch:
     def __init__(self, model_name: str = "all-MiniLM-L6-v2"):
@@ -21,10 +26,10 @@ class TextSimSearch:
             df = pd.read_csv(csv_path)
         except UnicodeDecodeError:
             try:
-                print("Default encoding failed. Trying 'latin-1' encoding...")
+                logger.info("Default encoding failed. Trying 'latin-1' encoding...")
                 df = pd.read_csv(csv_path, encoding="latin-1")
             except UnicodeDecodeError:
-                print("latin-1 encoding failed. Trying 'cp1252' encoding...")
+                logger.info("latin-1 encoding failed. Trying 'cp1252' encoding...")
                 df = pd.read_csv(csv_path, encoding="cp1252")
         return df
 
@@ -39,13 +44,16 @@ class TextSimSearch:
 
     def build_embeddings(self, texts: List[str]) -> np.ndarray:
         """Encodes a list of texts into embeddings using the SentenceTransformer model."""
-        embeddings = self.model.encode(texts, convert_to_numpy=True, show_progress_bar=True)
+        embeddings = self.model.encode(
+            texts, convert_to_numpy=True, show_progress_bar=True
+        )
         return embeddings.astype(np.float32)
 
     def build_index(self, embeddings: np.ndarray) -> faiss.Index:
         """Creates a FAISS index from the embeddings."""
         dim = embeddings.shape[1]
         index = faiss.IndexFlatL2(dim)
+        # pylint: disable-next = no-value-for-parameter
         index.add(embeddings)
         return index
 
@@ -56,14 +64,14 @@ class TextSimSearch:
         self.texts = df["combined_text"].tolist()
 
         if os.path.exists(index_file_path):
-            print("Loading existing FAISS index...")
+            logger.info("Loading existing FAISS index...")
             self.index = faiss.read_index(index_file_path)
             if torch.cuda.is_available() and faiss.get_num_gpus() > 0:
-                print("Moving index to GPU...")
+                logger.info("Moving index to GPU...")
                 res = faiss.StandardGpuResources()
                 self.index = faiss.index_cpu_to_gpu(res, 0, self.index)
         else:
-            print("Building new FAISS index...")
+            logger.info("Building new FAISS index...")
             embeddings = self.build_embeddings(self.texts)
             self.index = self.build_index(embeddings)
             # Save the index as CPU index even if built on GPU.
@@ -75,7 +83,9 @@ class TextSimSearch:
 
     def search_similar(self, query_text: str, k: int = 5) -> List[Tuple[str, float]]:
         """Searches the FAISS index for texts similar to the query."""
-        query_emb = self.model.encode([query_text], convert_to_numpy=True).astype(np.float32)
+        query_emb = self.model.encode([query_text], convert_to_numpy=True).astype(
+            np.float32
+        )
         distances, indices = self.index.search(query_emb, k)
         results = []
         for i, idx in enumerate(indices[0]):
@@ -87,10 +97,14 @@ class TextSimSearch:
 # Global instance for shared usage
 TEXT_SIMSEARCH_INSTANCE: TextSimSearch = None
 
+
 def get_text_sim_search() -> TextSimSearch:
     return TEXT_SIMSEARCH_INSTANCE
 
-def setup_text_sim_search(csv_path: str, index_file_path: str, model_name: str = "all-MiniLM-L6-v2") -> None:
+
+def setup_text_sim_search(
+    csv_path: str, index_file_path: str, model_name: str = "all-MiniLM-L6-v2"
+) -> None:
     global TEXT_SIMSEARCH_INSTANCE
     TEXT_SIMSEARCH_INSTANCE = TextSimSearch(model_name=model_name)
     TEXT_SIMSEARCH_INSTANCE.setup(csv_path, index_file_path)

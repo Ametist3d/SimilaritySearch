@@ -8,8 +8,8 @@ CACHE_DIR = os.path.join(BASE_DIR, "..", "..", "_CACHE")
 os.makedirs(CACHE_DIR, exist_ok=True)
 
 # Define the dataset directory
-DATASET_DIR = os.path.join(BASE_DIR, "..", "..", "_DS", "Txt_DS")
+DATASET_DIR = os.path.join(BASE_DIR, "..", "..", "_DS", "Gif_DS")
 
 # Define the embeddings file path
 DATASET_NAME = os.path.basename(DATASET_DIR)  # e.g., "Audio_DS"
-EMBEDDINGS_FILE = os.path.join(DATASET_DIR, f"{DATASET_NAME}_embeddings.index")
+EMBEDDINGS_FILE = os.path.join(DATASET_DIR, f"{DATASET_NAME}_embeddings.npz")

@@ -1,14 +1,18 @@
 import os
+import base64
+from io import BytesIO
+from typing import List, Tuple
+import logging
 import torch
 from torchvision import models, transforms
 import faiss
 import numpy as np
 from PIL import Image
 import requests
-import base64
-from io import BytesIO
-from typing import List, Tuple
+
 from config import DATASET_DIR
+
+logger = logging.getLogger(__name__)
 
 
 class ImageSimSearch:
@@ -67,15 +71,17 @@ class ImageSimSearch:
                 embeddings.append(emb)
                 valid_files.append(os.path.basename(img_file))
             except Exception as e:
-                print(f"Error processing {img_file}: {str(e)}")
+                logger.error(f"Error processing {img_file}: {str(e)}")
         embeddings = np.array(embeddings)
         return embeddings, valid_files
 
     def create_faiss_index(self, embeddings: np.ndarray) -> faiss.Index:
         """Create and return a FAISS index from the embeddings."""
+        # pylint: disable = no-value-for-parameter
         dimension = embeddings.shape[1]
         index = faiss.IndexFlatL2(dimension)
         index.add(embeddings.astype(np.float32))
+        # pylint: enable = no-value-for-parameter
         return index
 
     def search_similar(self, query_embedding: np.ndarray, top_k: int = 5) -> List[dict]:
@@ -89,11 +95,15 @@ class ImageSimSearch:
         for i, idx in enumerate(indices[0]):
             if idx >= len(self.image_files):
                 continue  # Skip invalid indices
+            # pylint: disable = unsubscriptable-object
             results.append(
                 {
-                    "image_path": os.path.normpath(os.path.join(DATASET_DIR, self.image_files[idx])),
+                    "image_path": os.path.normpath(
+                        os.path.join(DATASET_DIR, self.image_files[idx])
+                    ),
                     "similarity_score": float(1 / (1 + distances[0][i])),
                 }
+                # pylint: enable = unsubscriptable-object
             )
         return results
 
