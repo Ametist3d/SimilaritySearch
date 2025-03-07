@@ -8,3 +8,4 @@ torchaudio
 librosa
 fastapi
 uvicorn
+tqdm

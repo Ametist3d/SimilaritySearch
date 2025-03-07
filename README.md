@@ -37,21 +37,22 @@ All services are built with FastAPI and utilize FAISS for fast similarity search
    ```
    Make sure your Python version and environment support libraries such as PyTorch, FAISS, and FastAPI.
 
-**Configuration**
+## Configuration
 
 Each modality uses its own config.py file to set up key parameters and paths. The common configuration parameters include:
 
-BASE_DIR: The root directory for the module.
-CACHE_DIR: Directory where model weights and caches are stored.
-DATASET_DIR: Directory containing the dataset. Organize your datasets as follows:
-   Text: Place CSV files under _DS/Txt_DS
-   Audio: Place WAV files under _DS/Audio_DS
-   Image: Place image files (PNG, JPG, JPEG) under _DS/Img_DS
-GIF: Place GIF files under _DS/Gif_DS
-EMBEDDINGS_FILE: The path where computed embeddings or FAISS indexes will be saved.
+ - BASE_DIR: The root directory for the module.
+ - CACHE_DIR: Directory where model weights and caches are stored.
+ - DATASET_DIR: Directory containing the dataset. Organize your datasets as follows:
+    - Text: Place CSV files under _DS/Txt_DS
+    - Audio: Place WAV files under _DS/Audio_DS
+    - Image: Place image files (PNG, JPG, JPEG) under _DS/Img_DS
+    - GIF: Place GIF files under _DS/Gif_DS
+- EMBEDDINGS_FILE: The path where computed embeddings or FAISS indexes will be saved.
+
 Before running any service, verify that the paths in the corresponding config.py file match your local directory structure and dataset locations.
 
-**Running the Services**
+## Running the Services
 
 Each modality has its own FastAPI application implemented in a main.py file. To run a service (for example, the GIF similarity search), execute:
 ```bash
@@ -59,7 +60,7 @@ Each modality has its own FastAPI application implemented in a main.py file. To 
 ```
 By default, the service runs on http://0.0.0.0:5000. To run multiple services simultaneously, adjust the port number in each main.py file.
 
-**Sending Requests**
+## Sending Requests
 All services expose a /search endpoint that accepts POST requests with JSON payloads. Below are example payloads for each modality:
 
 1. *Text Similarity Search*
@@ -107,11 +108,11 @@ Payload:
 ```
 You can test these endpoints using tools like curl or Postman.
 
-**Project Structure**
+## Project Structure
 
-README.md: Project overview and detailed instructions.
-config.py: Contains configuration settings (dataset paths, cache directories, embedding file locations) for each modality.
-main.py: FastAPI application entry point for each service.
-request.py: Defines request data schemas using Pydantic.
-*_sim_search.py: Core modules for computing embeddings and performing similarity searches (for text, audio, image, and GIF).
-requirements.txt: Lists required dependencies for the project.
+ - README.md: Project overview and detailed instructions.
+ - config.py: Contains configuration settings (dataset paths, cache directories, embedding file locations) for each modality.
+ - main.py: FastAPI application entry point for each service.
+ - request.py: Defines request data schemas using Pydantic.
+ - *_sim_search.py: Core modules for computing embeddings and performing similarity searches (for text, audio, image, and GIF).
+ - requirements.txt: Lists required dependencies for the project.

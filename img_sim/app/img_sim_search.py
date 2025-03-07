@@ -9,6 +9,7 @@ import faiss
 import numpy as np
 from PIL import Image
 import requests
+from tqdm import tqdm
 
 from config import DATASET_DIR
 
@@ -65,7 +66,7 @@ class ImageSimSearch:
         ]
         embeddings = []
         valid_files = []
-        for img_file in image_files:
+        for img_file in tqdm(image_files, desc="Processing Images"):
             try:
                 emb = self.get_embedding(img_file)
                 embeddings.append(emb)

@@ -8,6 +8,7 @@ import librosa
 import torch
 import faiss
 from transformers import ASTFeatureExtractor, ASTModel
+from tqdm import tqdm
 
 
 # Import shared configuration
@@ -103,7 +104,7 @@ class AudioSimSearch:
         embeddings = []
         valid_files = []
 
-        for audio_file in audio_files:
+        for audio_file in tqdm(audio_files, desc="Processing Audio"):
             emb = self.wav_to_embedding(audio_file)
             if emb is not None:
                 embeddings.append(emb)
