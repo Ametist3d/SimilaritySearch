@@ -50,6 +50,12 @@ Each modality uses its own config.py file to set up key parameters and paths. Th
     - GIF: Place GIF files under _DS/Gif_DS
 - EMBEDDINGS_FILE: The path where computed embeddings or FAISS indexes will be saved.
 
+**Example datasets**
+ - **Text:**   - https://www.kaggle.com/code/ayushithakre12/starter-task-finding-semantic-textual-57d22b08-2
+ - **Images:** - https://academictorrents.com/details/df0aad374e63b3214ef9e92e178580ce27570e59
+ - **Audio:**  - https://www.kaggle.com/datasets/andradaolteanu/gtzan-dataset-music-genre-classification
+ - **GIF:**    - https://www.kaggle.com/datasets/electron0zero/giphy-dataset
+ 
 Before running any service, verify that the paths in the corresponding config.py file match your local directory structure and dataset locations.
 
 ## Running the Services
